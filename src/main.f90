@@ -1,7 +1,7 @@
 program calc_stress
   use ctrl_vars
-  use utils, only : calc_DIdemand, calc_Ademand, make_getgrid, make_urbanWL, comp_reverse, &
-    & comp_jump, urbanWL, path_1g, get_monday, get_term
+  use utils, only : calc_Ademand, make_getgrid, make_urbanWL, comp_reverse, &
+    & comp_jump, urbanWL, path_1g, get_monday, get_term, writer
 
   implicit none
 
@@ -12,10 +12,12 @@ program calc_stress
   real win(mx,my)
   real outflw(mx,my)
   real catchment(mx,my)
-  integer i , j , k , t
+  integer i, j, t
   integer irec
   integer iy , id , days
   character(4) cyear
+
+  real WD_A(mx,my)  !Agricultural water demand, 12mm/day
   !----------------------------------------------------------------------
 
   ! --- Import Mask data
@@ -25,7 +27,7 @@ program calc_stress
   close(11)
 
   ! --- Import Area data
-  open(12,file=trim(land_path)//'Area_'//trim(suffix)//'.bin',&
+  open(12,file=trim(land_path)//'AREA_'//trim(suffix)//'.bin',&
   &form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
   read(12,rec=1) ((area(i,j),i=1,mx),j=1,my)
   close(12)
@@ -37,7 +39,7 @@ program calc_stress
   end do 
 
   ! --- Import ocean and paddy land mask data.
-  open(13,file=trim(land_path)//'ClassFrac_'//trim(suffix)//'_ALOS.bin', &
+  open(13,file=trim(land_path)//'ClassFrac_'//trim(suffix)//'_MIRCA-GLCC.bin', &
     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
   read(13,rec=2)  ((ocean(i,j),i=1,mx),j=1,my)
   read(13,rec=15) ((paddy(i,j),i=1,mx),j=1,my)
@@ -66,7 +68,7 @@ program calc_stress
   close(16)
 
   ! --- Import crop stage datq
-  open(17,file=trim(land_path)//'cropstage_'//trim(suffix)//'_MAFF.bin',&
+  open(17,file=trim(land_path)//'cropstage_'//trim(suffix)//'.bin',&
     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
   do t = 1 , 36
     read(17,rec=t)  ((crpstg(i,j,t),i=1,mx),j=1,my)
@@ -74,10 +76,10 @@ program calc_stress
   close(17)
 
   ! --- Domestic and Industrial demand
-  call calc_DIdemand
+  ! call calc_DIdemand
 
   ! --- Agiricultural demand
-  call calc_Ademand
+  wd_a = calc_Ademand()
 
   if( b1gpath )  call make_getgrid
 
@@ -88,13 +90,16 @@ program calc_stress
 
   cwd(:,:,:) = 0.e0    !Total CWD
   do iy = isy , iey
+
+    print *, iy
+
     cwdy(:,:,:) = 0.e0 !Annual CWD
     call get_monday(iy,days)
     write(cyear,'(i4)') iy
     open(21,file=trim(sibuc_path)//'SiBUC_'//trim(runname)//'_'//cyear//'_'//trim(suffix)//'.bin',&
-  & form='unformatted', access='direct', recl=mx*my*ibin, status='old', action='read')
+      & form='unformatted', access='direct', recl=mx*my*ibin, status='old', action='read')
     open(22,file=trim(outflw_path)//'outflw'//cyear//'.bin',&
-  & form='unformatted', access='direct', recl=mx*my*ibin, action='read', status='old')
+      & form='unformatted', access='direct', recl=mx*my*ibin, action='read', status='old')
 
   do id = 1 , days
     irec = (id-1) * 23 + 22
@@ -122,7 +127,7 @@ program calc_stress
       end if  
 
       wr(i,j) = max( (outflw(i,j) - catchment(i,j) * 3.e-9 ) * 86400.e0 &
-&                    + win(i,j) * 1.e-3 * area(i,j) * (1.e0 - ocean(i,j)) , 0.e0    )
+        & + win(i,j) * 1.e-3 * area(i,j) * (1.e0 - ocean(i,j)) , 0.e0)
       wl(i,j) = wd(i,j) - wr(i,j)
     end do
     end do
@@ -136,8 +141,9 @@ program calc_stress
       cwdy(i,j,1) = cwdy(i,j,1) + min( wd(i,j) , wr(i,j) )
       cwd(i,j,2)  = cwd(i,j,2)  + wd(i,j)
       cwdy(i,j,2) = cwdy(i,j,2) + wd(i,j)
-      if( wd(i,j) < 0.e0 .or. min(wd(i,j),wr(i,j)) < 0.e0 )&
-&     write(6,*) wd(i,j),min(wd(i,j),wr(i,j)),iy,id,i,j
+      if( wd(i,j) < 0.e0 .or. min(wd(i,j),wr(i,j)) < 0.e0 ) then
+        write(6,*) wd(i,j),min(wd(i,j),wr(i,j)),iy,id,i,j
+      end if
     end do
     end do
 
@@ -148,44 +154,4 @@ end do !iy
 call writer(9999,cwd)
 
 write(6,*)'!!! CWD Calculation Finished !!!'
-
 end program calc_stress
-!======================================================================
-subroutine writer(iy,cwd)
-use ctrl_vars , only: mx,my,mask,csave,suffix,isy,iey
-implicit none
-integer,intent(in) :: iy  ! 9999 -> total
-real,intent(in) :: cwd(mx,my,2)
-real cwdw(mx,my) !cwd_write
-integer i , j
-character(4) cyear
-character(9) cterm
-
-do j = 1 , my
-do i = 1 , mx
-  if( mask(i,j) < 0.5)then           !Out of the mask
-    cwdw(i,j) = -9999.
-  else if( cwd(i,j,2) == 0.e0 )then  !No water demnd
-    cwdw(i,j) = -5555.
-  else
-    cwdw(i,j) = cwd(i,j,1) / cwd(i,j,2)
-    if( cwdw(i,j) < 0.9 .and. iy == 9999 ) write(6,'(i4,i4,f7.3)') i , j , cwdw(i,j)
-  end if
-end do
-end do
-
-if( iy /= 9999 )then
-  write(cyear,'(i4)') iy
-  open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cyear//'.bin',&
-& form='unformatted', access='direct', recl=mx*my, status='replace')
-else
-  write(cterm,'(i4,a1,i4)') isy, '-', iey
-  open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cterm//'.bin',&
-& form='unformatted', access='direct', recl=mx*my, status='replace')
-end if
-
-write(31,rec=1) ((cwdw(i,j),i=1,mx),j=1,my)
-close(31)
-
-return
-end subroutine writer  

@@ -1,0 +1,400 @@
+Page 1           Source Listing                  CALC_STRESS
+2021-12-27 18:24                                 ...qhd4q9cdj5hqxb6b1vr0000gp/T/ifortMUTfvR.i90
+
+      1 # 1 "src/main.f90"
+      2 program calc_stress
+      3   use ctrl_vars
+      4   use utils, only : calc_Ademand, make_getgrid, make_urbanWL, comp_reverse, &
+      5     & comp_jump, urbanWL, path_1g, get_monday, get_term, writer
+      6 
+      7   implicit none
+      8 
+      9   real cwd(mx,my,2) !water stress , 1:sum( min(wr,wd) )  2:sum(wd)
+     10   real cwdy(mx,my,2) !annual CWD
+     11   real ocean(mx,my)
+     12   real crpstg(mx,my,36) !when cropstg = 1,3,4 require water 12mm/day
+     13   real win(mx,my)
+     14   real outflw(mx,my)
+     15   real catchment(mx,my)
+     16   integer i, j, t
+     17   integer irec
+     18   integer iy , id , days
+     19   character(4) cyear
+     20 
+     21   real WD_A(mx,my)  !Agricultural water demand, 12mm/day
+     22 !----------------------------------------------------------------------
+     23 
+     24 ! --- Import Mask data
+     25   open(11,file=trim(land_path)//'Mask_'//trim(suffix)//'.bin', &
+     26     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+     27   read(11,rec=1) ((mask(i,j),i=1,mx),j=1,my)
+     28   close(11)
+     29 
+     30 ! --- Import Area data
+     31   open(12,file=trim(land_path)//'AREA_'//trim(suffix)//'.bin',&
+     32   &form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+     33   read(12,rec=1) ((area(i,j),i=1,mx),j=1,my)
+     34   close(12)
+     35 ! for areadata, convert km^2 -> m^2
+     36   do j = 1 , my
+     37     do i = 1 , mx
+     38       area(i,j) = area(i,j) * 1.e6
+     39     end do
+     40   end do 
+     41 
+     42 ! --- Import ocean and paddy land mask data.
+     43   open(13,file=trim(land_path)//'ClassFrac_'//trim(suffix)//'_MIRCA-GLCC.bin', &
+     44     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+     45   read(13,rec=2)  ((ocean(i,j),i=1,mx),j=1,my)
+     46   read(13,rec=15) ((paddy(i,j),i=1,mx),j=1,my)
+     47   close(13)
+     48 
+     49 ! --- Import import CamaFlood.next_xy data
+     50 ! - => jx, jy
+     51   open(14,file=trim(map_path)//'nextxy.bin', &
+     52     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+     53   read(14,rec=1) ((jx(i,j),i=1,mx),j=my,1,-1)
+     54   read(14,rec=2) ((jy(i,j),i=1,mx),j=my,1,-1) !Then, contents of JY are South to North
+     55   close(14)
+     56 
+     57 ! --- Import river rank data
+
+Page 2           Source Listing                  CALC_STRESS
+2021-12-27 18:24                                 src/main.f90
+
+     58   open(15,file=trim(map_path)//'rank.bin', &
+     59     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+     60   read(15,rec=1) ((rank(i,j,1),i=1,mx),j=my,1,-1)
+     61   read(15,rec=2) ((rank(i,j,2),i=1,mx),j=my,1,-1)
+     62   read(15,rec=3) ((rank(i,j,3),i=1,mx),j=my,1,-1)
+     63   close(15)
+     64 
+     65 ! --- Import cathment area data
+     66   open(16,file=trim(map_path)//'catchment-area.bin', &
+     67   & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+     68   read(16,rec=1) ((catchment(i,j),i=1,mx),j=my,1,-1)
+     69   close(16)
+     70 
+     71 ! --- Import crop stage datq
+     72   open(17,file=trim(land_path)//'cropstage_'//trim(suffix)//'.bin',&
+     73     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+     74   do t = 1 , 36
+     75     read(17,rec=t)  ((crpstg(i,j,t),i=1,mx),j=1,my)
+     76   end do
+     77   close(17)
+     78 
+     79 ! --- Domestic and Industrial demand
+     80 ! call calc_DIdemand
+     81 
+     82 ! --- Agiricultural demand
+     83   wd_a = calc_Ademand()
+     84 
+     85   if( b1gpath )  call make_getgrid
+     86 
+     87 ! No Urban Water Linw
+     88   iuwl(:,:) = 0
+     89 
+     90   if( burbanwl ) call make_urbanWL
+     91 
+     92   cwd(:,:,:) = 0.e0    !Total CWD
+     93   do iy = isy , iey
+     94 
+     95     print *, iy
+     96 
+     97     cwdy(:,:,:) = 0.e0 !Annual CWD
+     98     call get_monday(iy,days)
+     99     write(cyear,'(i4)') iy
+    100     open(21,file=trim(sibuc_path)//'SiBUC_'//trim(runname)//'_'//cyear//'_'//trim(suffix)//'.bin',&
+    101       & form='unformatted', access='direct', recl=mx*my*ibin, status='old', action='read')
+    102     open(22,file=trim(outflw_path)//'outflw'//cyear//'.bin',&
+    103       & form='unformatted', access='direct', recl=mx*my*ibin, action='read', status='old')
+    104 
+    105   do id = 1 , days
+    106     irec = (id-1) * 23 + 22
+    107     read(21,rec=irec) ((win(i,j),i=1,mx),j=1,my)
+    108     read(22,rec=id)   ((outflw(i,j),i=1,mx),j=my,1,-1)
+    109     do j = 1 , my
+    110     do i = 1 , mx
+    111       if( outflw(i,j) > 1.e9 ) outflw(i,j) = 0.e0
+    112     end do
+    113     end do
+    114 
+
+Page 3           Source Listing                  CALC_STRESS
+2021-12-27 18:24                                 src/main.f90
+
+    115     call comp_reverse(outflw)
+    116     if( bjump ) call comp_jump(outflw)
+    117 
+    118     call get_term(iy,id,t)
+    119 
+    120     wl(:,:) = 0.e0
+    121     do j = 1 , my
+    122     do i = 1 , mx
+    123       if( mask(i,j) < 0.5 ) cycle
+    124       if( crpstg(i,j,t) == 1 .or. crpstg(i,j,t) == 3 .or. crpstg(i,j,t) == 4 .or. crpstg(i,j,t) == 5)then !Irrigation Term
+    125         wd(i,j) = win(i,j) * 1.e-3 * area(i,j) * (1.e0-ocean(i,j)) / we + wd_DI(i,j) + wd_A(i,j) ![m3/day]
+    126       else
+    127         wd(i,j) = win(i,j) * 1.e-3 * area(i,j) * (1.e0-ocean(i,j)) / we + wd_DI(i,j) ![m3/day]
+    128       end if  
+    129 
+    130       wr(i,j) = max( (outflw(i,j) - catchment(i,j) * 3.e-9 ) * 86400.e0 &
+    131         & + win(i,j) * 1.e-3 * area(i,j) * (1.e0 - ocean(i,j)) , 0.e0)
+    132       wl(i,j) = wd(i,j) - wr(i,j)
+    133     end do
+    134     end do
+    135 
+    136     if( burbanwl ) call urbanWL(wd,wr,wl)
+    137     if( b1gpath  ) call path_1g(wd,wr,wl)
+    138   
+    139     do j = 1 , my
+    140     do i = 1 , mx
+    141       cwd(i,j,1)  = cwd(i,j,1)  + min( wd(i,j) , wr(i,j) )
+    142       cwdy(i,j,1) = cwdy(i,j,1) + min( wd(i,j) , wr(i,j) )
+    143       cwd(i,j,2)  = cwd(i,j,2)  + wd(i,j)
+    144       cwdy(i,j,2) = cwdy(i,j,2) + wd(i,j)
+    145       if( wd(i,j) < 0.e0 .or. min(wd(i,j),wr(i,j)) < 0.e0 ) then
+    146         write(6,*) wd(i,j),min(wd(i,j),wr(i,j)),iy,id,i,j
+    147       end if
+    148     end do
+    149     end do
+    150 
+    151   end do !id
+    152   call writer(iy,cwdy)
+    153   close(21) ; close(22)
+    154 end do !iy
+    155 call writer(9999,cwd)
+    156 
+    157 write(6,*)'!!! CWD Calculation Finished !!!'
+    158 end program calc_stress
+
+Page 4           Source Listing                  CALC_STRESS
+2021-12-27 18:24 Entry Points                    src/main.f90
+
+
+
+ENTRY POINTS
+
+  Name               
+                     
+ _MAIN__             
+
+
+SYMBOL CROSS REFERENCE
+
+ Name                       Object Declared Type            Bytes Dimen Elements Attributes       References                        
+                                                                                                                                    
+ AREA                       Local  33       R(4)            4     2     8265     SAVE             33,38,125,127,131                 
+ B1GPATH                    Param  85       L(4)            4           scalar                    85,137                            
+ BJUMP                      Param  116      L(4)            4           scalar                    116                               
+ BURBANWL                   Param  90       L(4)            4           scalar                    90,136                            
+ CALC_ADEMAND               Func   4        R(4)            4     2     8265                      4,83                              
+ CALC_STRESS                Prog   2                                                                                                
+ CATCHMENT                  Local  15       R(4)            4     2     8265                      68,130                            
+ COMP_JUMP                  Subr   5                                                              5,116                             
+ COMP_REVERSE               Subr   4                                                              4,115                             
+ CRPSTG                     Local  12       R(4)            4     3     297540                    75,124                            
+ CTRL_VARS                  Module 3                                                              3                                 
+ CWD                        Local  9        R(4)            4     3     16530                     92,141,143,155                    
+ CWDY                       Local  10       R(4)            4     3     16530                     97,142,144,152                    
+ CYEAR                      Local  19       CHAR            4           scalar                    99,100,102                        
+ DAYS                       Local  18       I(4)            4           scalar                    98,105                            
+ GET_MONDAY                 Subr   5                                                              5,98                              
+ GET_TERM                   Subr   5                                                              5,118                             
+ I                          Local  16       I(4)            4           scalar                    27,33,37,38,45,46,53,54,60,61,62,6
+                                                                                                  8,75,107,108,110,111,122,123,124,1
+                                                                                                  25,127,130,131,132,140,141,142,143
+                                                                                                  ,144,145,146                      
+ IBIN                       Param  26       I(4)            4           scalar                    26,32,44,52,59,67,73,101,103      
+ ID                         Local  18       I(4)            4           scalar                    105,106,108,118,146               
+ IEY                        Param  93       I(4)            4           scalar                    93                                
+ IREC                       Local  17       I(4)            4           scalar                    106,107                           
+ ISY                        Param  93       I(4)            4           scalar                    93                                
+ IUWL                       Local  88       I(4)            4     2     8265     SAVE             88                                
+ IY                         Local  18       I(4)            4           scalar                    93,95,98,99,118,146,152           
+ J                          Local  16       I(4)            4           scalar                    27,33,36,38,45,46,53,54,60,61,62,6
+                                                                                                  8,75,107,108,109,111,121,123,124,1
+                                                                                                  25,127,130,131,132,139,141,142,143
+                                                                                                  ,144,145,146                      
+ JX                         Local  53       I(4)            4     2     8265     SAVE             53                                
+ JY                         Local  54       I(4)            4     2     8265     SAVE             54                                
+ LAND_PATH                  Param  25       CHAR            128         scalar                    25,31,43,72                       
+ MAKE_GETGRID               Subr   4                                                              4,85                              
+ MAKE_URBANWL               Subr   4                                                              4,90                              
+ MAP_PATH                   Param  51       CHAR            128         scalar                    51,58,66                          
+ MASK                       Local  27       R(4)            4     2     8265     SAVE             27,123                            
+ MAX                        Func   130                                  scalar                    130                               
+ MIN                        Func   141                                  scalar                    141,142,145,146                   
+ MX                         Param  9        I(4)            4           scalar                    9,10,11,12,13,14,15,21,26,27,32,33
+                                                                                                  ,37,44,45,46,52,53,54,59,60,61,62,
+                                                                                                  67,68,73,75,101,103,107,108,110,12
+
+Page 5           Source Listing                  CALC_STRESS
+2021-12-27 18:24 Symbol Table                    src/main.f90
+
+ Name                       Object Declared Type            Bytes Dimen Elements Attributes       References                        
+                                                                                                                                    
+                                                                                                  2,140                             
+ MY                         Param  9        I(4)            4           scalar                    9,10,11,12,13,14,15,21,26,27,32,33
+                                                                                                  ,36,44,45,46,52,53,54,59,60,61,62,
+                                                                                                  67,68,73,75,101,103,107,108,109,12
+                                                                                                  1,139                             
+ OCEAN                      Local  11       R(4)            4     2     8265                      45,125,127,131                    
+ OUTFLW                     Local  14       R(4)            4     2     8265                      108,111,115,116,130               
+ OUTFLW_PATH                Param  102      CHAR            128         scalar                    102                               
+ PADDY                      Local  46       R(4)            4     2     8265     SAVE             46                                
+ PATH_1G                    Subr   5                                                              5,137                             
+ RANK                       Local  60       I(4)            4     3     24795    SAVE             60,61,62                          
+ RUNNAME                    Param  100      CHAR            16          scalar                    100                               
+ SIBUC_PATH                 Param  100      CHAR            128         scalar                    100                               
+ SUFFIX                     Param  25       CHAR            16          scalar                    25,31,43,72,100                   
+ T                          Local  16       I(4)            4           scalar                    74,75,118,124                     
+ TRIM                       Func   25                                   scalar                    25,31,43,51,58,66,72,100,102      
+ URBANWL                    Subr   5                                                              5,136                             
+ UTILS                      Module 4                                                              4                                 
+ WD                         Local  125      R(4)            4     2     8265     SAVE             125,127,132,136,137,141,142,143,14
+                                                                                                  4,145,146                         
+ WD_A                       Local  21       R(4)            4     2     8265                      83,125                            
+ WD_DI                      Local  125      R(4)            4     2     8265     SAVE             125,127                           
+ WE                         Param  125      R(4)            4           scalar                    125,127                           
+ WIN                        Local  13       R(4)            4     2     8265                      107,125,127,131                   
+ WL                         Local  120      R(4)            4     2     8265     SAVE             120,132,136,137                   
+ WR                         Local  130      R(4)            4     2     8265     SAVE             130,132,136,137,141,142,145,146   
+ WRITER                     Subr   5                                                              5,152,155                         
+
+Page 6           Source Listing                  CALC_STRESS
+2021-12-27 18:24 Subprograms/Common Blocks       src/main.f90
+
+
+
+SUBPROGRAMS/COMMON BLOCKS
+
+ Name                       Object Declared Type            Bytes Dimen Elements Attributes       References                        
+                                                                                                                                    
+ CALC_STRESS                Prog   2                                                                                                
+
+COMPILER OPTIONS BEING USED
+
+       -align noall                          -align nonone
+       -align nocommons                      -align nodcommons
+       -align noqcommons                     -align nozcommons
+       -align records                        -align nosequence
+       -align norec1byte                     -align norec2byte
+       -align norec4byte                     -align norec8byte
+       -align norec16byte                    -align norec32byte
+       -align norec64byte                    -align noarray8byte
+       -align noarray16byte                  -align noarray32byte
+       -align noarray64byte                  -align noarray128byte
+       -align noarray256byte                 -altparam
+       -assume accuracy_sensitive            -assume nobscc
+       -assume nobuffered_io                 -assume nobuffered_stdout
+       -assume byterecl                      -assume nocontiguous_assumed_shape
+       -assume nocontiguous_pointer          -assume cc_omp
+       -assume nocstring                     -assume nodummy_aliases
+       -assume nofailed_images               -assume nofpe_summary
+       -assume noieee_compares               -assume noieee_fpe_flags
+       -assume nominus0                      -assume noold_boz
+       -assume old_complex_align             -assume old_unit_star
+       -assume old_inquire_recl              -assume old_ldout_format
+       -assume old_ldout_zero                -assume noold_logical_assign
+       -assume noold_logical_ldio            -assume old_maxminloc
+       -assume old_xor                       -assume noprotect_allocates
+       -assume protect_constants             -assume noprotect_parens
+       -assume realloc_lhs                   -assume norecursion
+       -assume split_common                  -assume source_include
+       -assume nostd_intent_in               -assume std_minus0_rounding
+       -assume nostd_mod_proc_name           -assume std_value
+       -assume underscore                    -assume no2underscores
+       -auto                            no   -auto_scalar
+  no   -bintext                              -ccdefault default
+       -check arg_temp_created               -check assume
+       -check bounds                         -check contiguous
+       -check format                         -check output_conversion
+       -check overflow                       -check pointers
+       -check shape                          -check stack
+       -check teams                          -check uninitialized
+       -check udio_iostat                    -coarray-num-procs 0
+  no   -coarray-config-file                  -convert native
+       -cross_reference                      -D __INTEL_COMPILER=2021
+       -D __INTEL_COMPILER_UPDATE=4          -D __x86_64
+       -D __x86_64__                         -D __amd64
+       -D __amd64__                          -D __INTEL_COMPILER_BUILD_DATE=20210910
+       -D __PIC__                            -D __APPLE__
+       -D __MACH__                           -D _OPENMP=201611
+       -D __MMX__                            -D __SSE__
+
+Page 7           Source Listing                  CALC_STRESS
+2021-12-27 18:24                                 src/main.f90
+
+       -D __SSE_MATH__                       -D __SSE2__
+       -D __SSE2_MATH__                      -D __SSE3__
+       -D __SSSE3__                          -D __core2
+       -D __core2__                          -D __tune_core2__
+       -double_size 64                  no   -d_lines
+  no   -Qdyncom                              -error_limit 30
+  no   -f66                             no   -f77rtl
+  no   -fast                                 -fpscomp nofilesfromcmd
+       -fpscomp nogeneral                    -fpscomp noioformat
+       -fpscomp noldio_spacing               -fpscomp nologicals
+  no   -fpconstant                           -fpe3
+       -fprm nearest                    no   -ftz
+       -fp_model noprecise                   -fp_model fast
+       -fp_model nostrict                    -fp_model nosource
+       -fp_model nodouble                    -fp_model noextended
+       -fp_model novery_fast                 -fp_model noexcept
+       -fp_model nono_except                 -fp_modbits nofp_contract
+       -fp_modbits nono_fp_contract          -fp_modbits nofenv_access
+       -fp_modbits nono_fenv_access          -fp_modbits nocx_limited_range
+       -fp_modbits nono_cx_limited_range       -fp_modbits noprec_div
+       -fp_modbits nono_prec_div             -fp_modbits noprec_sqrt
+       -fp_modbits nono_prec_sqrt            -fp_modbits noftz
+       -fp_modbits nono_ftz                  -fp_modbits nointrin_limited_range
+       -fp_modbits nono_intrin_limited_range       -fp_modbits notrunc_compares
+       -fp_modbits nono_trunc_compares       -fp_modbits noieee_nan_compares
+       -fp_modbits nono_ieee_nan_compares       -fp_modbits honor_f32_conversion
+       -fp_modbits nono_honor_f32_conversion       -fp_modbits honor_f64_conversion
+       -fp_modbits nono_honor_f64_conversion       -fp_modbits nono_x87_copy
+       -fp_modbits nono_no_x87_copy          -fp_modbits noexception_semantics
+       -fp_modbits nono_exception_semantics       -fp_modbits noprecise_libm_functions
+       -fp_modbits nono_precise_libm_functions       -heap_arrays 0
+  no   -threadprivate_compat                 -free
+       -gen_interfaces                       -g2
+       -iface nomixed_str_len_arg            -iface nono_mixed_str_len_arg
+       -init noarrays                        -init nohuge
+       -init noinfinity                      -init nominus_huge
+       -init nominus_infinity                -init nominus_tiny
+       -init nonan                           -init nosnan
+       -init notiny                          -init nozero
+  no   -intconstant                          -integer_size 32
+  no   -mixed_str_len_arg                    -module ./target/develop/deps
+       -names lowercase                 no   -noinclude
+  no   -o                                    -qopenmp
+       -openmp-simd                          -O0
+  no   -pad_source                           -real_size 32
+  no   -recursive                            -reentrancy threaded
+       -vec=simd                             -show nofullpath
+       -show noinclude                       -show map
+       -show options                    no   -syntax_only
+  no   -threadcom                       no   -U
+  no   -vms                                  -w all
+       -w none                               -w alignments
+       -w declarations                       -w externals
+       -w general                            -w ignore_bounds
+       -w ignore_loc                         -w interfaces
+       -w shape                              -w truncated_source
+       -w uncalled                           -w uninitialized
+
+Page 8           Source Listing                  CALC_STRESS
+2021-12-27 18:24                                 src/main.f90
+
+       -w unused                             -w usage
+  no   -wrap-margins
+
+       -includepath : /opt/intel/oneapi/compiler/2021.4.0/mac/bin/intel64/../../compiler/include/icc/,.f,src/.f,./.f,
+           ./target/develop/deps/.f,/opt/intel/oneapi/compiler/2021.4.0/mac/bin/intel64/../../compiler/include/intel64/.f,
+           /opt/intel/oneapi/compiler/2021.4.0/mac/bin/intel64/../../compiler/include/icc/.f,/opt/intel/oneapi/compiler/2021.4.0/mac/bin/intel64/../../compiler/include/.f,
+           /Library/Developer/CommandLineTools/usr/lib/clang/13.0.0/include/.f,/usr/local/include/.f,/usr/include/.f
+       -list filename : ./info
+  no   -o
+
+COMPILER: Intel(R) Fortran 2021.4.0-2742
