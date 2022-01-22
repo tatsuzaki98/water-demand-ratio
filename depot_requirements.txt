@@ -1,0 +1,4 @@
+/depot/landsurface   # SiBUC /out_basic
+/depot/sibuc_results # SiBUC /output
+/depot/river_map     # CaMa-Flood /map
+/depot/outflw        # CaMa-Flood /out

@@ -1,6 +1,7 @@
 __pycache__
 /output/*
 /input/*
+/depot
 /target
 
 *.out
