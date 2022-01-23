@@ -1,10 +1,18 @@
+# specific dir
 __pycache__
-/output/*
-/input/*
+/output
+/input
 /depot
 /target
+/sandbox
 
+
+# specific suffix
 *.out
 *.mod
 *.bin
 *.zip
+
+
+# specific file
+Makefile

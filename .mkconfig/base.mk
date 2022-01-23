@@ -21,8 +21,8 @@ OPT_DEPS := ./target/optimized/deps
 ############################################################
 # Import Settings
 #
-include ./config/f90c_ifort.mk
-include ./config/f90c.mk
+__F90_COMPILER__
+include ./.mkconfig/f90c.mk
 include ./src/target.mk
 
 

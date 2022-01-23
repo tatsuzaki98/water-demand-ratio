@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -ex
+
+
+if [ -x "$(command -v ifort)" ]; then
+  awk '{gsub("__F90_COMPILER__", "include ./.mkconfig/f90c_ifort.mk"); print $0;}' ./.mkconfig/base.mk > ./Makefile
+elif [ -x "$(command -v gfortran)" ]; then
+  awk '{gsub("__F90_COMPILER__", "include ./.mkconfig/f90c_gfortran.mk"); print $0;}' ./.mkconfig/base.mk > ./Makefile
+else
+  echo hoge
+fi

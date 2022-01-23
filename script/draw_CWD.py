@@ -1,18 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import sys
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter,LatitudeLocator,LongitudeLocator
+import gdal
 import color_BR
 from matplotlib.colors import ListedColormap, BoundaryNorm
 import namelist
 #===============set param===============
-isy = 1981 ; iey = 2015
-ctitle = '(natural)'
-suffix = '_JRA'
+isy = 2000 ; iey = 2012
+ctitle = '(With Dam)'
+suffix = '_dam'
 
 mx = namelist.mx
 my = namelist.my
@@ -27,8 +27,10 @@ resolution:int=2 #0:rough 1:middle 2:hi
 undef=np.nan
 lakes_10m = cfeature.NaturalEarthFeature('physical', 'lakes', '10m',edgecolor='black',facecolor='none')
 states_10m  = cfeature.NaturalEarthFeature('cultural', 'admin_1_states_provinces_lines', '10m',edgecolor='black',facecolor='none')
+xloc = np.arange(135.5,136.5,0.5) 
+yloc = np.arange(34.5,36.0,0.5) 
 #=======================================
-data = open('./output/CWD_Japan3min'+suffix+'_'+str(isy)+'-'+str(iey)+'.bin','rb')
+data = open('./output/CWD_Yodo3min'+suffix+'_'+str(isy)+'-'+str(iey)+'.bin','rb')
 d0 = np.fromfile(data,np.float32)
 d = np.where(d0<0.,np.nan,d0)
 d = d.reshape(my,mx)
@@ -53,21 +55,36 @@ cmap.set_over(g8)
 bounds = np.arange(0,1.1,0.1)
 norm = BoundaryNorm(bounds,cmap.N)  #Essentially when plot
 
+############################################################
+map_src = gdal.Open('./map/Basin_No_Yodo.tif',gdal.GA_ReadOnly)
+map_data = map_src.GetRasterBand(1)
+map_array0 = map_data.ReadAsArray()
+map_array = np.array(map_array0)
+map_array = np.where(map_array<-8,np.nan,map_array)
+map_array = np.where(map_array==860604.,1.e7,map_array)
 
-fig = plt.figure(figsize=(12,8), dpi=300)
+xmin2:float=135.00 ; xmax2:float=137.00
+ymin2:float=34.00  ; ymax2:float=36.00
+mx2:int=18000 ; my2:int=18000
+reslx2 = (xmax2-xmin2) / float(mx2)
+resly2 = (ymax2-ymin2) / float(my2)
+x2 = np.arange(xmin2+reslx2/2.e0,xmax2,reslx2)
+y2 = np.arange(ymax2-resly2/2.e0,ymin2,-resly2)
+print(mx2,len(x2))
+print(my2,len(y2))
+#############################################################
+
+fig = plt.figure(figsize=(12,9), dpi=300)
 ax = plt.axes(projection=ccrs.PlateCarree())
-ax.set_extent([123,150,30,46])
-ax.coastlines(resolution='10m',linewidth=1, zorder=2)
-ax2 = plt.axes([0.10,0.55,0.3,0.18], projection=ccrs.PlateCarree())
-ax2.set_extent([123,133,24,30]) #[123,150,24,48]
-ax2.coastlines(resolution='10m', linewidth=1)
-
-ax.set_title('CWD'+ctitle, fontsize=30)
-draw = ax.imshow(d[40:360,:], extent=[123,150,30,46], interpolation='nearest', transform=ccrs.PlateCarree(), cmap=cmap, norm=norm, zorder=1)
-ax2.imshow(d[360:,:200], extent=[123,133,24,30], interpolation='nearest', transform=ccrs.PlateCarree(), cmap=cmap, norm=norm, zorder=1)
-fig.colorbar(draw, ax=ax, extend='max' ,shrink=0.75, ticks=bounds, orientation='vertical')
+ax.set_extent([xmin,xmax,ymin,ymax])
+plt.title('CWD'+ctitle, fontsize=30)
+ax.coastlines(resolution='10m')
+plt.imshow(d[:,:], extent=[xmin,xmax,ymin,ymax], interpolation='nearest', transform=ccrs.PlateCarree(), cmap=cmap, norm=norm)
+plt.colorbar(extend='max' ,shrink=1.0, ticks=bounds, orientation='vertical')
+plt.contour(x2, y2, map_array, levels=[1.e7-1], colors=['white'], transform=ccrs.PlateCarree(), linewidth=3)
 #----------------------------------make grid lines---------------------------------------
-gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, linewidth=1, color='gray', alpha=0.5, linestyle='--')
+ax.coastlines(resolution='10m',linewidth=3)
+gl = ax.gridlines(xlocs=xloc, ylocs=yloc, crs=ccrs.PlateCarree(), draw_labels=True, linewidth=1, color='gray', alpha=0.5, linestyle='--')
 gl.top_labels = False
 gl.bottom_labels = True
 gl.right_labels = False
@@ -75,28 +92,35 @@ gl.left_labels = True
 gl.xlines = True
 gl.ylines = True
 gl.xlabel_style = {'size':10,'color':'black'}
-gl.ylabel_style = {'size':10,'color':'black'}
+gl.ylabel_style = {'size':10,'color':'red'}
 gl.xlocator = LongitudeLocator()
 gl.ylocator = LatitudeLocator()
 gl.xformatter = LongitudeFormatter()
 gl.yformatter = LatitudeFormatter()
-#ax.add_feature(lakes_10m, linewidth=0.5)
-ax.add_feature(states_10m, linewidth=0.5, zorder=3)
-
-gl2=ax2.gridlines(crs=ccrs.PlateCarree(),draw_labels=True,linewidth=0.5,color='gray',alpha=0.5,linestyle='--')
-gl2.top_labels=False
-gl2.bottom_labels=True
-gl2.right_labels=True
-gl2.left_labels=False
-gl2.xlines=True
-gl2.ylines=True
-gl2.xlabel_style={'size':8,'color':'red','weight':'bold'}
-gl2.ylabel_style={'size':8,'color':'red','weight':'bold'}
-gl2.xlocator = mticker.FixedLocator([125,130])
-gl2.ylocator = mticker.FixedLocator([27])
-gl2.xformatter=LongitudeFormatter()
-gl2.yformatter=LatitudeFormatter()
+ax.add_feature(lakes_10m, linewidth=1.5)
+ax.add_feature(states_10m, linewidth=2, linestyle='dashdot')
 #----------------------------------------------------------------------------------------
+for y in range(0,my):
+  for x in range(0,mx):
+    if d0[y,x] > -6000. and d0[y,x] < -5000. :     
+      lat=ymax-float(y)*resl-resl*0.5
+      lon=xmin+float(x)*resl+resl*0.5
+      plt.scatter(lon, lat, s=200, transform=ccrs.PlateCarree(), color='limegreen', marker='*',zorder=2) # No water demand
+      bblank = True
+if bblank :
+  plt.figtext(0.7, 0.9, r'$\star$ No water demand', fontsize='15', ha='center', va='center', color='limegreen')
+#----- urban water line options Yodo(23,17)  
+lat = ymax - float(35-17+1-1)*resl - resl*0.5
+lon = xmin + float(23-1)*resl + resl*0.5
+plt.scatter(lon, lat, s=150, transform=ccrs.PlateCarree(), color='yellow', marker='<',zorder=2) # Yodo point
+
+for k in range(0,len(damx)):
+ lat=ymax-float(damy[k]-1)*resl-resl*0.5 #上端だから-
+ lon=xmin+float(damx[k]-1)*resl+resl*0.5 #左端だから+
+ plt.scatter(lon,lat,s=100,transform=ccrs.PlateCarree(),color='orange')#dam
+ plt.figtext(0.7,0.925,r'$\bullet$ Dam Location',fontsize='15',ha='center',va='center',color='orange')
+plt.figtext(0.7,0.925,r'$\bullet$ Dam Location',fontsize='15',ha='center',va='center',color='orange')
+
 plt.savefig('./CWD'+suffix+'.png')
 #plt.savefig('./CWD.png',bbox_inches='tight' )
 plt.cla()
@@ -107,7 +131,7 @@ plt.close()
 
 for year in range(isy,iey+1):
   print( year )       
-  data = open('./output/CWD_Japan3min'+suffix+'_'+str(year)+'.bin','rb')
+  data = open('./output/CWD_Yodo3min'+suffix+'_'+str(year)+'.bin','rb')
   d0 = np.fromfile(data,np.float32)
   d = np.where(d0<0.,np.nan,d0)
   d = d.reshape(my,mx)
@@ -116,20 +140,17 @@ for year in range(isy,iey+1):
   d0 = np.flipud(d0)
   d0 = np.where( d0 == 1.e0 , 2. , d0 )
 
-  fig = plt.figure(figsize=(12,8), dpi=300)
+  fig = plt.figure(figsize=(12,9), dpi=300)
   ax = plt.axes(projection=ccrs.PlateCarree())
-  ax.set_extent([123,150,30,46])
-  ax.coastlines(resolution='10m',linewidth=1, zorder=2)
-  ax2 = plt.axes([0.10,0.55,0.3,0.18], projection=ccrs.PlateCarree())
-  ax2.set_extent([123,133,24,30]) #[123,150,24,48]
-  ax2.coastlines(resolution='10m', linewidth=1)
-  
-  ax.set_title('CWD'+ctitle+' '+str(year), fontsize=30)
-  draw = ax.imshow(d[40:360,:], extent=[123,150,30,46], interpolation='nearest', transform=ccrs.PlateCarree(), cmap=cmap, norm=norm, zorder=1)
-  ax2.imshow(d[360:,:200], extent=[123,133,24,30], interpolation='nearest', transform=ccrs.PlateCarree(), cmap=cmap, norm=norm, zorder=1)
-  fig.colorbar(draw, ax=ax, extend='max' ,shrink=0.75, ticks=bounds, orientation='vertical')
+  ax.set_extent([xmin,xmax,ymin,ymax])
+  plt.title('CWD'+ctitle+str(year), fontsize=30)
+  ax.coastlines(resolution='10m')
+  plt.imshow(d[:,:], extent=[xmin,xmax,ymin,ymax], interpolation='nearest', transform=ccrs.PlateCarree(), cmap=cmap, norm=norm)
+  plt.colorbar(extend='max' ,shrink=1.0, ticks=bounds, orientation='vertical')
+#  plt.contour(x2, y2, map_array, levels=[1.e7-1], colors=['white'], transform=ccrs.PlateCarree(), linewidth=3)
   #----------------------------------make grid lines---------------------------------------
-  gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, linewidth=1, color='gray', alpha=0.5, linestyle='--')
+  ax.coastlines(resolution='10m',linewidth=3)
+  gl = ax.gridlines(xlocs=xloc, ylocs=yloc, crs=ccrs.PlateCarree(), draw_labels=True, linewidth=1, color='gray', alpha=0.5, linestyle='--')
   gl.top_labels = False
   gl.bottom_labels = True
   gl.right_labels = False
@@ -137,28 +158,27 @@ for year in range(isy,iey+1):
   gl.xlines = True
   gl.ylines = True
   gl.xlabel_style = {'size':10,'color':'black'}
-  gl.ylabel_style = {'size':10,'color':'black'}
+  gl.ylabel_style = {'size':10,'color':'red'}
   gl.xlocator = LongitudeLocator()
   gl.ylocator = LatitudeLocator()
   gl.xformatter = LongitudeFormatter()
   gl.yformatter = LatitudeFormatter()
-  #ax.add_feature(lakes_10m, linewidth=0.5)
-  ax.add_feature(states_10m, linewidth=0.5, zorder=3)
-  
-  gl2=ax2.gridlines(crs=ccrs.PlateCarree(),draw_labels=True,linewidth=0.5,color='gray',alpha=0.5,linestyle='--')
-  gl2.top_labels=False
-  gl2.bottom_labels=True
-  gl2.right_labels=True
-  gl2.left_labels=False
-  gl2.xlines=True
-  gl2.ylines=True
-  gl2.xlabel_style={'size':8,'color':'red','weight':'bold'}
-  gl2.ylabel_style={'size':8,'color':'red','weight':'bold'}
-  gl2.xlocator = mticker.FixedLocator([125,130])
-  gl2.ylocator = mticker.FixedLocator([27])
-  gl2.xformatter=LongitudeFormatter()
-  gl2.yformatter=LatitudeFormatter()
+  ax.add_feature(lakes_10m, linewidth=1.5)
+  ax.add_feature(states_10m, linewidth=2, linestyle='dashdot')
   #----------------------------------------------------------------------------------------
+  for y in range(0,my):
+    for x in range(0,mx):
+      if d0[y,x] > -6000. and d0[y,x] < -5000. :     
+        lat=ymax-float(y)*resl-resl*0.5
+        lon=xmin+float(x)*resl+resl*0.5
+        plt.scatter(lon, lat, s=200, transform=ccrs.PlateCarree(), color='limegreen', marker='*',zorder=2) # No water demand
+        bblank = True
+  if bblank :
+    plt.figtext(0.7, 0.9, r'$\star$ No water demand', fontsize='15', ha='center', va='center', color='limegreen')
+  #----- urban water line options Yodo(23,17)  
+  lat = ymax - float(35-17+1-1)*resl - resl*0.5
+  lon = xmin + float(23-1)*resl + resl*0.5
+  plt.scatter(lon, lat, s=150, transform=ccrs.PlateCarree(), color='yellow', marker='<',zorder=2) # Yodo point
   plt.savefig('./fig/CWD'+suffix+'_'+str(year)+'.png')
   plt.cla()
   plt.clf()
