@@ -1,30 +1,23 @@
 program make_rank
-  implicit none
-  include '/Users/tatsuzaki98/Lab/thailand-sibuc-211128/include/define.cwd.in'
-
-  integer,parameter :: ibin = 1 !ifort:1, gfortran:4
-  character(128),parameter :: cmap = '/Users/tatsuzaki98/Lab/cwd/input/map/'
-  character(128),parameter :: OUT_DIR = '/Users/tatsuzaki98/Lab/cwd/map/'
-  ! integer, allocatable :: rank(mx,my,3)
-  integer, allocatable :: rank(:,:,:) !1:rivre number 2:from estuary 3:branch number
-  integer jx(mx,my) , jy(mx,my) !Next XY
-  real uparea(mx,my)
-  real ctmare(mx,my)
-  real catchment(mx,my)
-  integer ibasin
-  logical bchange
-  integer id !distance from estuary
-  integer,allocatable :: id_max(:)
-  logical bbranch(mx,my)
-  integer i , j , k , ii , jj
-  integer ic !count
-  integer ib !branch
-  integer ib_max
-  integer ib_max_temp
-  !======================================================================
-
-  allocate(rank(mx, my, 3))
-
+implicit none
+integer,parameter :: ibin = 1 !ifort:1, gfortran:4
+character(128),parameter :: cmap = '/lake5/tasaka/CaMa-Flood/CaMa-Flood_v396a/map/Yodo2_03min/'
+integer,parameter :: mx = 40 , my =  35
+integer rank(mx,my,3) !1:rivre number 2:from estuary 3:branch number
+integer jx(mx,my) , jy(mx,my) !Next XY
+real uparea(mx,my)
+real catchment(mx,my)
+integer ibasin
+logical bchange
+integer id !distance from estuary
+integer,allocatable :: id_max(:)
+logical bbranch(mx,my)
+integer i , j , k , ii , jj
+integer ic !count
+integer ib !branch
+integer ib_max
+integer ib_max_temp
+!======================================================================
 open(11,file=trim(cmap)//'nextxy.bin',&
 &form='unformatted', access='direct', recl=mx*my*ibin, action='read')
 read(11,rec=1) ((jx(i,j),i=1,mx),j=my,1,-1) !Read as South to North
@@ -146,36 +139,30 @@ end do
 write(6,'(i3)') rank(mx,j,3)
 end do
 
-open(21,file=trim(OUT_DIR)//'rank.bin',&
+open(21,file='./map/rank.bin',&
 &form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
 write(21,rec=1) ((rank(i,j,1),i=1,mx),j=my,1,-1) !Write as North to South
 write(21,rec=2) ((rank(i,j,2),i=1,mx),j=my,1,-1)
 write(21,rec=3) ((rank(i,j,3),i=1,mx),j=my,1,-1)
 close(21)
 
-open(22,file=trim(OUT_DIR)//'nextxy.bin',&
+open(22,file='./map/nextxy.bin',&
 &form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
 write(22,rec=1) ((jx(i,j),i=1,mx),j=my,1,-1) !Write as North to South
 write(22,rec=2) ((jy(i,j),i=1,mx),j=my,1,-1) !Write as North to South
 close(22)
 
-
-open(13,file=trim(cmap)//'ctmare.bin',&
-&form='unformatted', access='direct', recl=mx*my*ibin, action='read')
-read(13,rec=1) ((ctmare(i,j),i=1,mx),j=my,1,-1)
-close(13)
-
 do j = 1 , my
 do i = 1 , mx
-  if( uparea(i,j) >= 0.e0  .and. ctmare(i,j) >= 0.e0 )then
-    catchment(i,j) = uparea(i,j) + ctmare(i,j)
+  if( uparea(i,j) >= 0.e0 )then
+    catchment(i,j) = uparea(i,j)
   else
     catchment(i,j) = 0.e0
   end if
 end do
 end do      
 
-open(23,file=trim(OUT_DIR)//'catchment-area.bin',&
+open(23,file='./map/catchment-area.bin',&
 &form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
 write(23,rec=1) ((catchment(i,j),i=1,mx),j=my,1,-1) !Write as North to South
 close(23)

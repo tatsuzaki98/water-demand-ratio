@@ -1,8 +1,8 @@
 from PIL import Image
 #https://note.nkmk.me/python-pillow-gif/
 
-isy = 1981 ; iey = 2015
-suffix = '_JRA'
+isy = 2000 ; iey = 2012
+suffix = '_comp'
 
 files=[]
 

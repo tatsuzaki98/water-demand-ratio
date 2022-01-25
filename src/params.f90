@@ -20,16 +20,18 @@ module ctrl_vars
   !----- calculation options -----
   logical,parameter :: b1gpath = .true. !1grid cell path
   logical,parameter :: bjump = .true. !fill CaMa-Jump
-  logical,parameter :: burbanwl = .false. !uraban water line
+  logical,parameter :: burbanwl = .true. !uraban water line
 
   !----- calculation vars -----
   real wd(mx,my) , wr(mx,my) !water demand and water resources  [m3/day]
   real wd_DI(mx,my) !Domestic + Industrial water demand
+  real WD_A(mx,my)  !Agricultural water demand, 12mm/day
   real wl(mx,my) !water lack, +:lack ; -:surplus
 
   !----- comomon vars -----
   real mask(mx,my)
   real area(mx,my)
+  real catchment2(mx,my) !catchment(original)
   real paddy(mx,my)
   integer pref(mx,my) !Prefecture
   integer jx(mx,my) , jy(mx,my) !CaMa Next Grids

@@ -1,10 +1,5 @@
 module utils
   implicit none
-  private
-
-  public :: calc_Ademand, make_getgrid, make_urbanWL, comp_reverse, &
-    & comp_jump, urbanWL, path_1g, get_monday, get_term, writer
-
   contains
   !======================================================================
   !++ calc_DIdemand
@@ -18,6 +13,65 @@ module utils
   !++ get_monday(iy,days)
   !++ get_term(iy,day,t)
   !======================================================================
+  subroutine calc_DIdemand
+    use ctrl_vars , only: wd_DI, mx, my, mask, pref, wu, land_path, suffix, ibin
+    real pop(mx,my) !Population
+    integer,allocatable :: idata(:,:) !industrial data
+    integer k , l
+    integer i, j
+    character(32) cpref
+    !----------------------------------------------------------------------
+    write(6,*) 'Make Domestic and Industrial Water Demand'
+    open(101,file=trim(land_path)//'Prefecture_'//trim(suffix)//'.bin',&
+    &form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+    read(101,rec=1) ((pref(i,j),i=1,mx),j=1,my)
+    close(101)
+
+    open(102,file=trim(land_path)//'Population_'//trim(suffix)//'.bin',&
+      & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
+      read(102,rec=1) ((pop(i,j),i=1,mx),j=1,my)
+    close(102)
+
+    open(103,file='./statistics/Industrial2005.csv', action='read')
+    read(103,'()')
+
+    l = 0
+    do k = 1 , 60
+      read(103,*,end=999) cpref
+      l = l + 1
+    end do
+    999 continue
+    allocate( idata(6,l) ) ! PrefectureNumber, IndustrialWater, OtherWater, GroundWater, RiverWater, Populatoin
+    rewind(103)
+    read(103,'()')
+
+    do k = 1 , l
+      read(103,*) cpref , idata(1:6,k)
+      write(6,*) adjustl(cpref)
+    end do
+    write(6,*) ' '
+    write(6,*) ' '
+
+    do j = 1 , my
+    do i = 1 , mx
+      if( mask(i,j) < 0.5 )then
+        wd_DI(i,j) = 0.e0
+        cycle
+      else
+        do k = 1 , l
+          if( pref(i,j) == idata(1,k) )then
+            wd_DI(i,j) =  wu * 1.e-3 * pop(i,j) + &
+    &       real(idata(2,k) + idata(3,k) + idata(5,k)) * pop(i,j) / (real(idata(6,k)) * 1.e3)
+            exit
+          end if
+        end do
+      end if
+    end do
+    end do
+
+    return
+  end subroutine calc_DIdemand
+
 
   ! ############################################################################
   ! # Procedure Description Here
@@ -147,12 +201,14 @@ module utils
   end subroutine make_getgrid
   !======================================================================
   subroutine comp_reverse(outflw)
-  use ctrl_vars , only : mx , my , jx , jy
+  use ctrl_vars , only : mx , my , jx , jy , rank , catchment2
   real,intent(inout) :: outflw(mx,my)
   real outflw_temp(mx,my)
   real inflw
-  integer ii , jj
-    integer i , j
+  integer ii , jj , ii2 , jj2
+  integer n
+  integer,save :: n_max = -9
+  integer i , j
 
   do j = 1 , my
   do i = 1 , mx
@@ -160,23 +216,56 @@ module utils
   end do
   end do
 
+  if( n_max == -9 )then
+    write(6,*) 'initialize comp_reverse'
+    do j = 1 , my
+    do i = 1 , mx
+      if( rank(i,j,2) > n_max ) n_max = rank(i,j,2)
+    end do
+    end do
+  end if    
+
+  ! 1st try : use inflow
+  do n = n_max , 1 , -1
+    do j = 1 , my
+    do i = 1 , mx
+      if( rank(i,j,2) /= n ) cycle
+      if( outflw(i,j) < 0.e0 )then
+        inflw = 0.e0  
+        do jj = 1 , my
+        do ii = 1 , mx
+          if( jx(ii,jj) == i .and. jy(ii,jj) == j .and. outflw_temp(ii,jj) > 0.e0 )then
+            inflw = inflw + outflw_temp(ii,jj)
+          end if
+        end do
+        end do
+        if( inflw > 0.e0 )then
+          outflw(i,j) = inflw
+        end if 
+      end if 
+    end do
+    end do
+  end do
+
+  ! 2nd try : average with the down stream
   do j = 1 , my
   do i = 1 , mx
-    if( outflw_temp(i,j) < 0.e0 )then
-      inflw = 0.e0  
-      do jj = 1 , my
-      do ii = 1 , mx
-        if( jx(ii,jj) == i .and. jy(ii,jj) == j )then
-          inflw = inflw + outflw_temp(ii,jj)
+    if( outflw(i,j) < 0.e0 )then
+      ii = jx(i,j) ; jj = jy(i,j) !down stream
+      do n = 1 , 3
+        if( ii <= -9 .or. jj <= -9 ) cycle
+        if( outflw_temp(ii,jj) > 0.e0 )then
+          outflw(i,j) = outflw_temp(ii,jj) * catchment2(i,j) / catchment2(ii,jj)
+          cycle
+        else
+          ii2 = ii ; jj2 = jj
+          ii = jx(ii2,jj2) ; jj = jy(ii2,jj2)
         end if
       end do
-      end do
-      if( inflw > 0.e0 )then
-        outflw(i,j) = inflw
-      end if 
-    end if 
+    end if     
   end do
   end do
+
 
   return
   end subroutine comp_reverse
@@ -281,54 +370,94 @@ module utils
   return
   end subroutine comp_jump
   !=====================================================================-
-  subroutine urbanWL(wd,wr,wl)
-  use ctrl_vars , only : mx,my,rank,iuwl
-  real,intent(in) :: wd(mx,my)
+  subroutine urbanWL(wd,wr,wl,outflw)
+  use ctrl_vars , only : mx,my,rank,iuwl,bjump
+  integer,parameter :: lx = 23 , ly = 17 !water intake point
+  real,intent(in) :: wd(mx,my) , outflw(mx,my)
   real,intent(inout) :: wr(mx,my) , wl(mx,my)
-  real wro(mx,my) !water resource from its branch
+  real outflw2(mx,my) ! outflw through (lx,ly)
   real twl !total water lack
-    integer i , j
+  real wl2       ! water lack rate to distribute
+  real twd
+  integer,save :: ic = 0
+  integer i , j
 
-  wro(:,:) = 0.e0
-  ! Case 1 : Yodo River(23,17) -> Osaka & East Hyogo
-  wr(23,17) = wr(23,17) - 80.e0 * 86400.e0 !Kanzaki & Old Yodo
-  twl = wd(23,17)
+  !+++++ Case 1 : Yodo River(lx,ly) -> Osaka & East Hyogo +++++
+
+  ! total water require = Osaka + East Hyogo + downstream + 80[m3/s]
+  ! 80[m3/s] -> Kanzaki & Old Yodo river
+  outflw2(:,:) = 0.e0
+  outflw2(lx,ly) = outflw(lx,ly)
   do j = 1 , my
-  do i = 1 , mx  
-    if( iuwl(i,j) == 1 .and. rank(i,j,1) == rank(23,17,1) .and. rank(i,j,3) == rank(23,17,3))then
-      wro(i,j) = max( wr(i,j)-wr(23,17) , 0.e0 ) 
-      twl = twl + wd(i,j) - wro(i,j) !downstream of (23,17)
-    else if( iuwl(i,j) == 1 )then
-      twl = twl + wl(i,j)
-    end if 
+  do i = 1 , mx
+    if( rank(i,j,1) == rank(lx,ly,1) .and. rank(i,j,2) < rank(lx,ly,2) .and. rank(i,j,3) == rank(lx,ly,3) )then
+      outflw2(i,j) = outflw2(lx,ly)
+    end if
   end do
   end do
-  
-  if( wr(23,17) >= twl )then  !Enough Water
-    do j = 1 , my
-    do i = 1 , mx
-      if( iuwl(i,j) == 1 .and. rank(i,j,1) == rank(23,17,1) .and. rank(i,j,3) == rank(23,17,3))then
-        wr(i,j) = wd(i,j)
-        wl(i,j) = twl - wr(23,17) - wro(i,j)
-      else if( iuwl(i,j) == 1 )then
-        wr(i,j) = wd(i,j)
-        wl(i,j) = 0.e0
+  if( bjump ) call comp_jump(outflw2)
+  do j = 1 , my
+  do i = 1 , mx
+    if( i == lx .and. j == ly) cycle
+    outflw2(i,j) = outflw(i,j) - outflw2(i,j)
+  end do
+  end do  
+
+  twl = wd(lx,ly) + 80.e0 * 86400.e0
+  twd = wd(lx,ly) + 80.e0 * 86400.e0
+  do j = 1 , my
+  do i = 1 , mx
+    if( i == lx .and. j == ly ) cycle
+    if( iuwl(i,j) == 1 )then
+      twd = twd + wd(i,j)
+      if( outflw(i,j) /= outflw2(i,j) )then !downstream
+        twl = twl + min( max( wl(i,j) + ( outflw(i,j) - outflw2(i,j) ) * 86400.e0 , 0.e0 ) , wd(i,j) )
+      else !Osaka or East Hyogo
+        if( wl(i,j) > 0.e0 ) twl = twl + wl(i,j)
       end if
-    end do
-    end do
-  else   !Water Lack
-    do j = 1 , my
-    do i = 1 , mx
-      if( iuwl(i,j) == 1 .and. rank(i,j,1) == rank(23,17,1) .and. rank(i,j,3) == rank(23,17,3))then
-        wr(i,j) = wd(i,j) * wr(23,17) / twl + wro(i,j)
+    end if
+  end do
+end do
+
+if( wr(lx,ly) >= twl )then !enough water resource
+  do j = 1 , my
+  do i = 1 , mx
+    if( iuwl(i,j) == 1 )then
+      if( wl(i,j) > 0.e0 )then ! receave from Urban WL
         wl(i,j) = 0.e0
-      else if( iuwl(i,j) == 1 )then
-        wr(i,j) = wd(i,j) * wr(23,17) / twl
-        wl(i,j) = wd(i,j) - wr(i,j)
+        wr(i,j) = wd(i,j)
       end if
-    end do
-    end do 
-  end if
+    end if
+  end do
+  end do
+  wl(lx,ly) = min( wl(lx,ly) - twl , 0.e0 )
+else
+  wl2 = ( wr(lx,ly) - 80.e0 * 86400.e0 ) / ( twl - 80.e0 * 86400.e0 )
+  if( wl2 < 0.e0 ) wl2 = 0.e0
+  ic = ic + 1
+  write(6,'(a19,1x,3f8.2,i6)') 'Water Lack at UWL, ', outflw(lx,ly) , twl / 86400. , twd / 86400. ,  ic
+  do j = 1 , my
+  do i = 1 , mx
+    if( iuwl(i,j) == 1 )then
+      if( outflw(i,j) /= outflw2(i,j) )then !downstream
+        if( wl(i,j) + ( outflw(i,j) - outflw2(i,j) ) * 86400.e0 > 0.e0 )then !water lack
+          wr(i,j) = max( wr(i,j) - ( outflw(i,j) - outflw2(i,j) ) * 86400.e0 , 0.e0 )& 
+&                 + ( wl(i,j) + ( outflw(i,j) - outflw2(i,j) ) * 86400.e0 ) * ( 1.e0 - wl2 )
+          wl(i,j) = 0.e0
+        end if
+      else if( i == lx .and. j == ly )then
+        wl(i,j) = wd(i,j) * ( 1.e0 - wl2 )
+        wr(i,j) = wd(i,j) - wl(i,j)
+      else !Osaka or East Hyogo
+        if( wl(i,j) > 0.e0 )then ! receave from Urban WL
+          wl(i,j) = wl(i,j) * ( 1.e0 - wl2 )
+          wr(i,j) = wd(i,j) - wl(i,j)
+        end if
+      end if
+    end if
+  end do
+  end do  
+  end if    
 
   return
   end subroutine urbanWL
@@ -365,8 +494,9 @@ module utils
     if( wl_temp(ig(i,j),jg(i,j)) .le. 0.e0 )then !(ig,jg) has surplus
       wl(i,j) = 0.e0
     else
-      wl(i,j) = wl(i,j) * ( -1.e0 * wl(ig(i,j),jg(i,j)) ) &
-  &           / ( -1.e0 * wl(ig(i,j),jg(i,j))  + wl_temp(ig(i,j),jg(i,j)) ) !require /total require
+      wl(i,j) = wl(i,j) * ( 1.e0 &
+  &             - ( -1.e0 * wl(ig(i,j),jg(i,j)) ) &
+  &             / ( -1.e0 * wl(ig(i,j),jg(i,j)) + wl_temp(ig(i,j),jg(i,j)) ) ) ! 1 - (require / total require)
     end if
   end do
   end do  
@@ -434,47 +564,5 @@ module utils
 
   return
   end subroutine get_term
-
-    
-  !======================================================================
-  subroutine writer(iy,cwd)
-    use ctrl_vars , only: mx,my,mask,csave,suffix,isy,iey, ibin
-    implicit none
-    integer,intent(in) :: iy  ! 9999 -> total
-    real,intent(in) :: cwd(mx,my,2)
-    real cwdw(mx,my) !cwd_write
-    integer i , j
-    character(4) cyear
-    character(9) cterm
-
-    do j = 1 , my
-    do i = 1 , mx
-      if( mask(i,j) < 0.5)then           !Out of the mask
-        cwdw(i,j) = -9999.
-      else if( cwd(i,j,2) == 0.e0 )then  !No water demnd
-        cwdw(i,j) = -5555.
-      else
-        cwdw(i,j) = cwd(i,j,1) / cwd(i,j,2)
-        if( cwdw(i,j) < 0.9 .and. iy == 9999 ) write(6,'(i4,i4,f7.3)') i , j , cwdw(i,j)
-      end if
-    end do
-    end do
-
-    if( iy /= 9999 )then
-      write(cyear,'(i4)') iy
-      open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cyear//'.bin',&
-    & form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
-    else
-      write(cterm,'(i4,a1,i4)') isy, '-', iey
-      open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cterm//'.bin',&
-    & form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
-    end if
-
-    write(31,rec=1) ((cwdw(i,j),i=1,mx),j=1,my)
-    close(31)
-
-    return
-  end subroutine writer
-
 
 end module utils
