@@ -76,11 +76,8 @@ module utils
   ! ############################################################################
   ! # Procedure Description Here
   ! # 
-  pure function calc_Ademand() result(wd_a)
-    use ctrl_vars , only : mx, my, area, paddy, dd, we
-
-    ! --- returns
-    real wd_a(mx,my)
+  subroutine calc_Ademand
+    use ctrl_vars , only : mx, my, area, paddy, dd, we, wd_a
     integer i , j
 
     do j = 1 , my
@@ -92,7 +89,7 @@ module utils
         end if
       end do
     end do
-  end function calc_Ademand
+  end subroutine calc_Ademand
 
 
   !======================================================================
@@ -564,5 +561,46 @@ else
 
   return
   end subroutine get_term
+
+  !======================================================================
+  subroutine writer(iy,cwd)
+    use ctrl_vars , only: mx,my,mask,csave,suffix,isy,iey
+    implicit none
+    integer,intent(in) :: iy  ! 9999 -> total
+    real,intent(in) :: cwd(mx,my,2)
+    real cwdw(mx,my) !cwd_write
+    integer i , j
+    character(4) cyear
+    character(9) cterm
+
+    do j = 1 , my
+    do i = 1 , mx
+      if( mask(i,j) < 0.5)then           !Out of the mask
+        cwdw(i,j) = -9999.
+      else if( cwd(i,j,2) == 0.e0 )then  !No water demnd
+        cwdw(i,j) = -5555.
+      else
+        cwdw(i,j) = cwd(i,j,1) / cwd(i,j,2)
+        if( cwdw(i,j) < 0.9 .and. iy == 9999 ) write(6,'(i4,i4,f7.3)') i , j , cwdw(i,j)
+      end if
+    end do
+    end do
+
+    if( iy /= 9999 )then
+      write(cyear,'(i4)') iy
+      open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cyear//'.bin',&
+    & form='unformatted', access='direct', recl=mx*my, status='replace')
+    else
+      write(cterm,'(i4,a1,i4)') isy, '-', iey
+      open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cterm//'.bin',&
+    & form='unformatted', access='direct', recl=mx*my, status='replace')
+    end if
+
+    write(31,rec=1) ((cwdw(i,j),i=1,mx),j=1,my)
+    close(31)
+
+    return
+  end subroutine writer
+
 
 end module utils

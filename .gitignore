@@ -2,8 +2,10 @@ __pycache__
 /output/*
 /input/*
 /target
+/depot
 
 *.out
 *.mod
 *.bin
 *.zip
+*.o
