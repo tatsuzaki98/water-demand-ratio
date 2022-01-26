@@ -15,7 +15,7 @@ contains
 !++ get_term(iy,day,t)
 !======================================================================
 subroutine calc_DIdemand
-use ctrl_vars , only: wd_DI, mx, my, mask, area, pref, wu, land_path, suffix, ibin
+use ctrl_vars , only: wd_DI, mx, my, mask, pref, wu, land_path, suffix, ibin
 real pop(mx,my) !Population
 integer,allocatable :: idata(:,:) !industrial data
 integer k , l
@@ -198,7 +198,7 @@ real inflw
 integer ii , jj , ii2 , jj2
 integer n
 integer,save :: n_max = -9
-real cat_sum
+! real cat_sum
 
 do j = 1 , my
 do i = 1 , mx
@@ -364,7 +364,7 @@ integer,parameter :: lx = 23 , ly = 17 !water intake point
 real,intent(in) :: wd(mx,my) , outflw(mx,my)
 real,intent(inout) :: wr(mx,my) , wl(mx,my)
 real outflw2(mx,my) ! outflw through (lx,ly)
-real wro(mx,my) !water resource not through (lx,ly)
+! real wro(mx,my) !water resource not through (lx,ly)
 real twl !total water lack
 real wl2       ! water lack rate to distribute
 real twd
@@ -551,5 +551,45 @@ end if
 
 return
 end subroutine get_term
+
+  !======================================================================
+  subroutine writer(iy,cwd)
+  use ctrl_vars , only: mx,my,mask,csave,suffix,isy,iey, ibin
+  implicit none
+  integer,intent(in) :: iy  ! 9999 -> total
+  real,intent(in) :: cwd(mx,my,2)
+  real cwdw(mx,my) !cwd_write
+  integer i , j
+  character(4) cyear
+  character(9) cterm
+
+  do j = 1 , my
+  do i = 1 , mx
+    if( mask(i,j) < 0.5)then           !Out of the mask
+      cwdw(i,j) = -9999.
+    else if( cwd(i,j,2) == 0.e0 )then  !No water demnd
+      cwdw(i,j) = -5555.
+    else
+      cwdw(i,j) = cwd(i,j,1) / cwd(i,j,2)
+      if( cwdw(i,j) < 0.9 .and. iy == 9999 ) write(6,'(i4,i4,f7.3)') i , j , cwdw(i,j)
+    end if
+  end do
+  end do
+
+  if( iy /= 9999 )then
+    write(cyear,'(i4)') iy
+    open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cyear//'.bin',&
+  & form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
+  else
+    write(cterm,'(i4,a1,i4)') isy, '-', iey
+    open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cterm//'.bin',&
+      & form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
+  end if
+
+  write(31,rec=1) ((cwdw(i,j),i=1,mx),j=1,my)
+  close(31)
+
+  return
+  end subroutine writer  
 
 end module utils

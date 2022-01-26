@@ -1,20 +1,25 @@
 module ctrl_vars
   implicit none
   save
-  include '/home/tatsuzaki98/RWES/cwd/depot/define.sibuc.in'
+  integer, parameter :: MX = 87
+  integer, parameter :: MY = 95
+  integer, parameter :: ISY = 2011
+  integer, parameter :: IEY = 2020
+  character, parameter :: CNAME*8 = 'th-gsmap'
+  character, parameter :: CRESL*6 = '0.1deg'
 
   !----- data path settings -----
-  character(128), parameter :: DEPOT_DIR = '/home/tatsuzaki98/RWES/cwd/depot'
-  character(128), parameter :: outflw_path = trim(DEPOT_DIR)//'/cama-flood'
-  character(128), parameter :: sibuc_path = trim(DEPOT_DIR)//'/sibuc'
-  character(128), parameter :: land_path = trim(DEPOT_DIR)//'/landsurface'
-  character(128), parameter :: map_path = trim(DEPOT_DIR)//'/map'
+  character(128), parameter :: DEPOT_DIR = '/home/tatsuzaki98/Depot/raw'
+  character(128), parameter :: outflw_path = trim(DEPOT_DIR)//'/outflw_th-Bgsmap-Wdam0.1deg/'
+  character(128), parameter :: sibuc_path = trim(DEPOT_DIR)//'/sibuc_th-Bgsmap0.1deg/output/'
+  character(128), parameter :: land_path = trim(DEPOT_DIR)//'/landsurface/'
+  character(128), parameter :: map_path = trim(DEPOT_DIR)//'/cwd_th-Bgsmap-Wdam-0.1deg/map/'
 
 
   ! --- params ---
   integer,parameter :: ibin = 4 !ifort:1 , gfortran:4
-  character(16) ,parameter :: csave = 'nodam' !save name
-  character(16) ,parameter :: runname = 'obs' !SiBUC Runname
+  character(16) ,parameter :: csave = 'th-gsmap' !save name
+  character(16) ,parameter :: runname = 'proc' !SiBUC Runname
   character(16) ,parameter :: suffix = cname//cresl 
   real,parameter :: we = 0.85 !Irrigation efficiency
   real,parameter :: dd = 12   !Daily Declease of paddy water by penetration 12mm/day
