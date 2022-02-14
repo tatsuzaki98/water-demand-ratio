@@ -1,5 +1,5 @@
 Page 1           Source Listing                  CALC_STRESS
-2022-01-25 17:15                                 ...qhd4q9cdj5hqxb6b1vr0000gp/T/iforthNmgKd.i90
+2022-02-14 21:41                                 ...qhd4q9cdj5hqxb6b1vr0000gp/T/ifortOTMCzq.i90
 
       1 # 1 "src/main.f90"
       2 program calc_stress
@@ -60,7 +60,7 @@ Page 1           Source Listing                  CALC_STRESS
      57     & form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
 
 Page 2           Source Listing                  CALC_STRESS
-2022-01-25 17:15                                 src/main.f90
+2022-02-14 21:41                                 src/main.f90
 
      58   read(15,rec=1) ((rank(i,j,1),i=1,mx),j=my,1,-1)
      59   read(15,rec=2) ((rank(i,j,2),i=1,mx),j=my,1,-1)
@@ -121,7 +121,7 @@ Page 2           Source Listing                  CALC_STRESS
     114     call get_term(iy,id,t)
 
 Page 3           Source Listing                  CALC_STRESS
-2022-01-25 17:15                                 src/main.f90
+2022-02-14 21:41                                 src/main.f90
 
     115 
     116     wl(:,:) = 0.e0
@@ -165,7 +165,7 @@ Page 3           Source Listing                  CALC_STRESS
     154 end program calc_stress
 
 Page 4           Source Listing                  CALC_STRESS
-2022-01-25 17:15 Entry Points                    src/main.f90
+2022-02-14 21:41 Entry Points                    src/main.f90
 
 
 
@@ -226,7 +226,7 @@ SYMBOL CROSS REFERENCE
                                                                                                   ,42,43,44,50,51,52,57,58,59,60,65,
 
 Page 5           Source Listing                  CALC_STRESS
-2022-01-25 17:15 Symbol Table                    src/main.f90
+2022-02-14 21:41 Symbol Table                    src/main.f90
 
  Name                       Object Declared Type            Bytes Dimen Elements Attributes       References                        
                                                                                                                                     
@@ -260,7 +260,7 @@ Page 5           Source Listing                  CALC_STRESS
  WRITER                     Subr   6                                                              6,147,150                         
 
 Page 6           Source Listing                  CALC_STRESS
-2022-01-25 17:15 Subprograms/Common Blocks       src/main.f90
+2022-02-14 21:41 Subprograms/Common Blocks       src/main.f90
 
 
 
@@ -321,7 +321,7 @@ COMPILER OPTIONS BEING USED
        -D __MMX__                            -D __SSE__
 
 Page 7           Source Listing                  CALC_STRESS
-2022-01-25 17:15                                 src/main.f90
+2022-02-14 21:41                                 src/main.f90
 
        -D __SSE_MATH__                       -D __SSE2__
        -D __SSE2_MATH__                      -D __SSE3__
@@ -382,7 +382,7 @@ Page 7           Source Listing                  CALC_STRESS
        -w uncalled                           -w uninitialized
 
 Page 8           Source Listing                  CALC_STRESS
-2022-01-25 17:15                                 src/main.f90
+2022-02-14 21:41                                 src/main.f90
 
        -w unused                             -w usage
   no   -wrap-margins

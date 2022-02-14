@@ -12,9 +12,9 @@ module ctrl_vars
 
 
   !----- depot path ---
-  character(128), parameter :: DEPOT_PATH = '/Users/tatsuzaki98/Depot/grad-research/raw'
-  character(128), parameter :: OUTFLW_PATH = trim(DEPOT_PATH)//'/outflw_th-Bgsmap-Wdam0.1deg/'
-  character(128), parameter :: SIBUC_PATH = trim(DEPOT_PATH)//'/sibuc_th-Bgsmap0.1deg/output/'
+  character(128), parameter :: DEPOT_PATH = '/Volumes/tz98-hdd-bu/Depot/raw'
+  character(128), parameter :: OUTFLW_PATH = trim(DEPOT_PATH)//'/outflw_th_biased_dam_paddy0.1deg/'
+  character(128), parameter :: SIBUC_PATH = trim(DEPOT_PATH)//'/sibuc_th-fixed_paddy/'
   character(128), parameter :: LAND_PATH = trim(DEPOT_PATH)//'/landsurface/'
   character(128), parameter :: MAP_PATH =  trim(DEPOT_PATH)//'/cwd_th-Bgsmap-Wdam-0.1deg/map/'
 

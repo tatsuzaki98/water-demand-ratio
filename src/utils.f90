@@ -22,9 +22,11 @@ module utils
     character(32) cpref
     !----------------------------------------------------------------------
     write(6,*) 'Make Domestic and Industrial Water Demand'
+
     open(101,file=trim(land_path)//'Prefecture_'//trim(suffix)//'.bin',&
     &form='unformatted', access='direct',recl=mx*my*ibin, action='read', status='old')
     read(101,rec=1) ((pref(i,j),i=1,mx),j=1,my)
+
     close(101)
 
     open(102,file=trim(land_path)//'Population_'//trim(suffix)//'.bin',&
@@ -36,10 +38,12 @@ module utils
     read(103,'()')
 
     l = 0
+
     do k = 1 , 60
       read(103,*,end=999) cpref
       l = l + 1
     end do
+
     999 continue
     allocate( idata(6,l) ) ! PrefectureNumber, IndustrialWater, OtherWater, GroundWater, RiverWater, Populatoin
     rewind(103)
@@ -564,7 +568,7 @@ else
 
   !======================================================================
   subroutine writer(iy,cwd)
-    use ctrl_vars , only: mx,my,mask,csave,suffix,isy,iey
+    use ctrl_vars , only: mx,my,mask,csave,suffix,isy,iey, ibin
     implicit none
     integer,intent(in) :: iy  ! 9999 -> total
     real,intent(in) :: cwd(mx,my,2)
@@ -588,12 +592,12 @@ else
 
     if( iy /= 9999 )then
       write(cyear,'(i4)') iy
-      open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cyear//'.bin',&
-    & form='unformatted', access='direct', recl=mx*my, status='replace')
+      open(31,file='./output/CWD_'//trim(suffix)//'_'//cyear//'.bin',&
+    & form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
     else
       write(cterm,'(i4,a1,i4)') isy, '-', iey
-      open(31,file='./output/CWD_'//trim(suffix)//'_'//trim(csave)//'_'//cterm//'.bin',&
-    & form='unformatted', access='direct', recl=mx*my, status='replace')
+      open(31,file='./output/CWD_'//trim(suffix)//'_'//cterm//'.bin',&
+    & form='unformatted', access='direct', recl=mx*my*ibin, status='replace')
     end if
 
     write(31,rec=1) ((cwdw(i,j),i=1,mx),j=1,my)
