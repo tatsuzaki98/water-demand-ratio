@@ -13,6 +13,9 @@ __pycache__
 *.bin
 *.zip
 
+# ifort dev files
+*__genmod.f90
+*.i90
 
 # specific file
 Makefile

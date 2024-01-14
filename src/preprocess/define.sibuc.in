@@ -1,0 +1,42 @@
+      integer, parameter :: MX = 87
+      integer, parameter :: MY = 95
+      character, parameter :: CNAME*8 = 'th-gsmap'
+      character, parameter :: CRESL*6 = '0.1deg'
+
+      real, parameter :: XMIN = 97.20
+      real, parameter :: XMAX = 105.90
+      real, parameter :: YMIN = 11.50
+      real, parameter :: YMAX = 21.00
+
+      real, parameter :: RESL = 0.1
+
+      integer, parameter :: ISY = 2011
+      integer, parameter :: IEY = 2020
+!==================================================
+      integer, parameter :: isibuc = 2   ! 1: before var 2020.12 2: ver 2020.12
+
+      integer nx,ny,lx,ly
+      parameter ( lx = 3840 )             !
+      parameter ( ly = 3840 )
+      parameter ( nx = 43200 )             !
+      parameter ( ny = 21600 )            !
+!===================================================
+
+!--caution-- if you simulate in high-resolution (minimum=1/120.) please adjust the grids to the row data
+!row data => (x=119.~ 151. y=19.~51. resl=1/120.)
+!===================================================
+      real undef,nresl,xnmin,ynmin,pi,rad
+      parameter ( undef  = -9999.)
+      parameter ( nresl = 1./120. )
+      parameter ( xnmin=119. )
+      parameter ( ynmin=19.  )
+      parameter ( RAD    = 6.378E6 ) ! radious of earth [m]
+
+!===================================================
+      integer i,j,ii,jj
+      real xxx,yyy
+!===================================================
+      real clon(0:mx+1),clat(0:my+1)
+      real llon(mx),rlon(mx)
+      real dlat(my),ulat(my)
+      real mask(mx,my),area(mx,my)

@@ -1,3 +1,27 @@
 {
-    "fortran.ignoreWarning.fortls": true
+    "editor.tabSize": 4,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": null,
+    "explorer.sortOrder": "type",
+    "fortran.fortls.path": "/home/tatsuzaki98/.local/bin/fortls",
+    "fortran.formatting.formatter": "fprettify",
+    "fortran.formatting.path": "/home/tatsuzaki98/.local/bin",
+    "fortran.formatting.fprettifyArgs": [
+        "--indent",
+        "2",
+        "--fortran",
+        "f90",
+        "--case",
+        "1",
+        "1",
+        "1",
+        "1"
+    ],
+    "fortran.linter.compiler": "ifort",
+    "fortran.linter.compilerPath": "/opt/intel/oneapi/compiler/latest/linux/bin/intel64/ifort",
+    "fortran.linter.includePaths": [
+        "/usr/include/**",
+        "${workspaceFolder}/src/**",
+        "/opt/intel/oneapi/mkl/latest/include/**"
+    ]
 }
